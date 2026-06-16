@@ -6,7 +6,8 @@
 (function () {
   "use strict";
 
-  /* Product data — gebruikt door de vergelijk-modal (beide categorieën) */
+  /* Productdata — alle Quint Audio producten met hun eigenschappen.
+     Wordt gebruikt door de vergelijk-modal om spec-rijen op te bouwen. */
   var PRODUCTS = {
     L10:{series:"L-series",type:"Line array module",drivers:'1×10" ND + 2×1.75"',use:"Touring",desc:"Full range line array module"},
     L20:{series:"L-series",type:"Line array module",drivers:'2×10" + 1×4" + 1×2.5"',use:"Touring",desc:"High performance full-range line array module"},
@@ -40,15 +41,19 @@
     D8:{series:"D-series",type:"Accessory",drivers:"4/8× I/O",use:"Touring · Installation",desc:"Connector panel for P-series"}
   };
 
+  /* Handige querySelector-helpers zodat de code korter en leesbaarder blijft */
   var $ = function (sel, ctx) { return (ctx || document).querySelector(sel); };
   var $$ = function (sel, ctx) { return Array.prototype.slice.call((ctx || document).querySelectorAll(sel)); };
 
-  /* electronics-series → om de "add more"-pool per categorie te filteren */
+  /* Electronics-series — gebruikt om de vergelijk-pool te splitsen:
+     speakers en elektronica mogen niet door elkaar worden vergeleken */
   var ELEC_SERIES = { "A-series": 1, "P-series": 1, "D-series": 1 };
   function isElec(name) { var p = PRODUCTS[name]; return !!(p && ELEC_SERIES[p.series]); }
 
   /* ========================================================
-     NAVBAR — mega-menu (hover)
+     NAVBAR — mega-menu opent bij hover op een nav-item
+     Sluit na een korte vertraging zodat de muis naar het
+     dropdown-panel kan bewegen zonder dat het direct verdwijnt.
      ======================================================== */
   function initNavbar() {
     var nav = $(".q-nav");
@@ -57,6 +62,7 @@
     var groups = $$(".q-nav-drop-group", nav);
     var timer = null;
 
+    /* Toon de dropdown-groep die bij het gehovered nav-item hoort */
     function openMenu(name) {
       clearTimeout(timer);
       if (!name) return closeMenu();
@@ -66,12 +72,15 @@
         it.classList.toggle("is-open", it.getAttribute("data-menu") === name);
       });
     }
+    /* Verberg de dropdown en verwijder de actieve klasse van alle items */
     function closeMenu() {
       drop && drop.classList.remove("is-open");
       $$(".q-nav-item", nav).forEach(function (it) { it.classList.remove("is-open"); });
     }
+    /* Wacht 120 ms voor sluiten — geeft de muis tijd om naar het panel te bewegen */
     function scheduleClose() { clearTimeout(timer); timer = setTimeout(closeMenu, 120); }
 
+    /* Koppel hover-events aan elk nav-item: openen bij binnenkomst, sluiten bij verlaten */
     $$(".q-nav-item", nav).forEach(function (item) {
       var menu = item.getAttribute("data-menu");
       item.addEventListener("mouseenter", function () { openMenu(menu || null); });
@@ -84,17 +93,23 @@
   }
 
   /* ========================================================
-     COMPARE — gedeelde state via localStorage
+     COMPARE — vergelijkstatus opslaan in localStorage
+     zodat de selectie behouden blijft als je tussen pagina's
+     navigeert (bijv. van catalogus naar productpagina).
      ======================================================== */
   var COMPARE_KEY = "quint-compare";
+
+  /* Haal de huidige vergelijklijst op uit localStorage */
   function getCompare() {
     try { return JSON.parse(localStorage.getItem(COMPARE_KEY)) || []; }
     catch (e) { return []; }
   }
+  /* Sla de vergelijklijst op en herrender alle UI-elementen */
   function setCompare(arr) {
     localStorage.setItem(COMPARE_KEY, JSON.stringify(arr));
     renderCompare();
   }
+  /* Voeg een product toe of verwijder het (maximaal 4 producten tegelijk) */
   function toggleCompare(name) {
     var arr = getCompare();
     var i = arr.indexOf(name);
@@ -102,24 +117,28 @@
     else if (arr.length < 4) arr.push(name);
     setCompare(arr);
   }
+  /* Verwijder één specifiek product uit de vergelijking */
   function removeCompare(name) {
     var arr = getCompare().filter(function (x) { return x !== name; });
     setCompare(arr);
   }
+  /* Leeg de hele vergelijklijst en sluit de modal */
   function clearCompare() {
     setCompare([]);
     closeCompareModal();
   }
 
+  /* Synchroniseer alle vergelijk-UI: kaart-checkboxes, productpagina-knop en de tray onderaan */
   function renderCompare() {
     var arr = getCompare();
 
-    /* card-checkboxes synchroniseren */
+    /* Zet de "in-compare" klasse op de cataloguskaart als het product geselecteerd is */
     $$("[data-compare-card]").forEach(function (card) {
       var name = card.getAttribute("data-compare-card");
       card.classList.toggle("in-compare", arr.indexOf(name) > -1);
     });
-    /* product-pagina knop */
+
+    /* Update de knoptekst en stijl op de productdetailpagina */
     $$("[data-compare-toggle]").forEach(function (btn) {
       var name = btn.getAttribute("data-compare-toggle");
       var on = arr.indexOf(name) > -1;
@@ -130,11 +149,16 @@
       btn.classList.toggle("qbtn--ghost", !on);
     });
 
+    /* Toon of verberg de vergelijk-tray onderaan het scherm */
     var tray = $(".compare-tray");
     if (!tray) return;
     tray.classList.toggle("is-visible", arr.length > 0);
+
+    /* Update de teller (bijv. "Compare · 2/4") */
     var count = $(".compare-tray-count", tray);
     if (count) count.textContent = "Compare · " + arr.length + "/4";
+
+    /* Bouw de chips (productnaam + verwijderknop) opnieuw op */
     var chips = $(".compare-tray-chips", tray);
     if (chips) {
       chips.innerHTML = "";
@@ -151,6 +175,8 @@
         chips.appendChild(chip);
       });
     }
+
+    /* Schakel de "Compare →"-knop in zodra er minstens 2 producten geselecteerd zijn */
     var openBtn = $(".compare-tray-open", tray);
     if (openBtn) {
       openBtn.disabled = arr.length < 2;
@@ -158,8 +184,9 @@
     }
   }
 
+  /* Koppel alle klik-events voor vergelijken: kaartcheckboxes, productknop en trayknoppen */
   function initCompare() {
-    /* card checkboxes */
+    /* Checkbox op elke cataloguskaart — stopPropagation zodat de kaart zelf niet ook navigeert */
     $$("[data-compare-card]").forEach(function (card) {
       var name = card.getAttribute("data-compare-card");
       var box = $(".cat-card-compare", card);
@@ -170,11 +197,13 @@
         });
       }
     });
-    /* product-pagina toggle */
+
+    /* Knop op de productdetailpagina */
     $$("[data-compare-toggle]").forEach(function (btn) {
       btn.addEventListener("click", function () { toggleCompare(btn.getAttribute("data-compare-toggle")); });
     });
-    /* tray buttons */
+
+    /* Knoppen in de tray: alles wissen of modal openen */
     var tray = $(".compare-tray");
     if (tray) {
       var clearBtn = $(".compare-tray-clear", tray);
@@ -185,33 +214,42 @@
     renderCompare();
   }
 
-  /* Vergelijk-modal opbouwen */
+  /* ========================================================
+     VERGELIJK-MODAL — bouw de vergelijktabel dynamisch op
+     op basis van de geselecteerde producten in localStorage.
+     ======================================================== */
   function openCompareModal() {
     var arr = getCompare();
-    if (arr.length < 2) return;
+    if (arr.length < 2) return; /* Minimaal 2 producten nodig */
     var modal = $(".compare-modal");
     if (!modal) return;
+
+    /* Haal productobjecten op; filter ongeldige namen eruit */
     var products = arr.map(function (n) { return { name: n, p: PRODUCTS[n] }; }).filter(function (o) { return o.p; });
     var cols = products.length;
-    var MAX = 4;
+    var MAX = 4; /* Maximaal 4 producten naast elkaar */
 
+    /* Pas de koptekst aan op basis van het aantal producten */
     $(".compare-modal-head h2").textContent = cols + (cols === 1 ? " product" : " products") + " side by side";
 
+    /* Stel het CSS-grid in: labelkolom + MAX productkolommen */
     var table = $(".compare-table", modal);
     table.style.gridTemplateColumns = "minmax(200px, 232px) repeat(" + MAX + ", minmax(180px, 1fr))";
     table.innerHTML = "";
 
+    /* Hulpfunctie om een div met een klasse aan te maken */
     function cell(cls) { var d = document.createElement("div"); d.className = cls; return d; }
 
-    /* 4 vaste slots: gevulde producten, daarna één "add"-slot, daarna leeg */
+    /* Maak slots: gevulde producten, dan één "voeg toe"-slot, dan lege slots */
     var slots = [];
     for (var s = 0; s < MAX; s++) slots.push(products[s] || null);
     var addIndex = cols < MAX ? cols : -1;
 
-    /* kaart-rij */
+    /* Bouw de koptijdrij: lege hoek + een kolom per slot */
     table.appendChild(cell("compare-corner"));
     slots.forEach(function (o, i) {
       if (o) {
+        /* Gevuld slot: toon afbeelding, naam, type en verwijderknop */
         var head = cell("compare-col-head");
         var img = cell("compare-col-img");
         img.textContent = o.name + " image";
@@ -233,12 +271,14 @@
         rm.textContent = "Remove ×";
         rm.addEventListener("click", function () {
           removeCompare(o.name);
+          /* Sluit de modal als er nog maar 1 product over is */
           if (getCompare().length < 2) closeCompareModal();
           else openCompareModal();
         });
         head.appendChild(rm);
         table.appendChild(head);
       } else {
+        /* Leeg slot: toon een "+" als het het volgende beschikbare slot is */
         var empty = cell("compare-col-empty");
         if (i === addIndex) {
           var plus = cell("compare-add-plus");
@@ -252,10 +292,11 @@
       }
     });
 
-    /* spec-rijen — oranje stip waar waarden verschillen */
+    /* Bouw de spec-rijen op — een oranje stip verschijnt als waarden verschillen */
     var rows = [["Type", "type"], ["Drivers / components", "drivers"], ["Application", "use"], ["Description", "desc"]];
     rows.forEach(function (r, ri) {
-      var alt = ri % 2 === 0 ? " alt" : "";
+      var alt = ri % 2 === 0 ? " alt" : ""; /* Afwisselende achtergrondkleur */
+      /* Tel unieke waarden om te bepalen of producten op dit punt verschillen */
       var seen = {}, uniq = 0;
       products.forEach(function (o) { var v = o.p[r[1]]; if (!(v in seen)) { seen[v] = 1; uniq++; } });
       var differs = cols > 1 && uniq > 1;
@@ -263,6 +304,7 @@
       var label = cell("compare-row-label" + alt);
       label.appendChild(document.createTextNode(r[0]));
       if (differs) {
+        /* Voeg een oranje stip toe als indicator dat de waarden niet gelijk zijn */
         var dot = document.createElement("span");
         dot.className = "compare-diff-dot";
         dot.title = "Values differ";
@@ -276,11 +318,12 @@
       });
     });
 
-    /* add more to compare */
+    /* "Voeg meer toe aan vergelijking"-sectie: filter op dezelfde categorie (speakers of elektronica) */
     var addmore = $(".compare-addmore", modal);
     if (addmore) {
       addmore.innerHTML = "";
       var firstElec = products[0] && isElec(products[0].name);
+      /* Toon alleen producten uit dezelfde categorie die nog niet geselecteerd zijn */
       var pool = Object.keys(PRODUCTS).filter(function (n) {
         return isElec(n) === !!firstElec && arr.indexOf(n) === -1 && n !== "T24";
       });
@@ -290,13 +333,13 @@
         eb2.textContent = "Add more to compare";
         addmore.appendChild(eb2);
         var pills = cell("compare-addmore-pills");
-        var VISIBLE = 14;
+        var VISIBLE = 14; /* Maximaal 14 pills tonen, de rest achter "+X more" */
         var full = cols >= MAX;
         pool.slice(0, VISIBLE).forEach(function (n) {
           var pill = document.createElement("button");
           pill.type = "button";
           pill.className = "compare-pill";
-          pill.disabled = full;
+          pill.disabled = full; /* Uitgeschakeld als de vergelijking al vol is */
           var pl = document.createElement("span");
           pl.className = "compare-pill-plus";
           pl.textContent = "+";
@@ -306,9 +349,11 @@
           sr.className = "compare-pill-series";
           sr.textContent = PRODUCTS[n].series;
           pill.appendChild(sr);
+          /* Voeg toe aan vergelijking en herlaad de modal */
           pill.addEventListener("click", function () { toggleCompare(n); openCompareModal(); });
           pills.appendChild(pill);
         });
+        /* Toon hoeveel producten er buiten de zichtbare pills vallen */
         var extra = pool.length - Math.min(pool.length, VISIBLE);
         if (extra > 0) {
           var more = document.createElement("span");
@@ -322,16 +367,22 @@
 
     modal.classList.add("is-open");
   }
+
+  /* Sluit de vergelijk-modal */
   function closeCompareModal() {
     var modal = $(".compare-modal");
     if (modal) modal.classList.remove("is-open");
   }
+
+  /* Koppel sluit- en printknop aan de vergelijk-modal */
   function initCompareModal() {
     var modal = $(".compare-modal");
     if (!modal) return;
+    /* Klik buiten het modal-panel sluit de modal */
     modal.addEventListener("click", function (e) { if (e.target === modal) closeCompareModal(); });
     var close = $(".compare-modal-close", modal);
     if (close) close.addEventListener("click", closeCompareModal);
+    /* Printknop roept de native browser-printdialoog aan */
     var printBtn = $(".compare-print", modal);
     if (printBtn) printBtn.addEventListener("click", function () { window.print(); });
     var clearAll = $(".compare-clear-all", modal);
@@ -339,13 +390,17 @@
   }
 
   /* ========================================================
-     CATEGORY TOGGLE (Loudspeakers / Electronics op één pagina)
+     CATEGORIETOGGLE — schakel tussen Loudspeakers en Electronics
+     op de cataloguspagina zonder een paginalading.
      ======================================================== */
   function initCategoryToggle() {
     var sections = $$(".cat[data-category]");
-    if (sections.length < 2) return;
+    if (sections.length < 2) return; /* Alleen relevant als er twee categorieën zijn */
+
     function show(cat) {
+      /* Verberg alle secties behalve de geselecteerde categorie */
       sections.forEach(function (s) { s.hidden = s.getAttribute("data-category") !== cat; });
+      /* Update de actieve stijl op de toggle-knoppen */
       $$("[data-show-category]").forEach(function (b) {
         var on = b.getAttribute("data-show-category") === cat;
         b.classList.toggle("qbtn--navy", on);
@@ -353,15 +408,18 @@
       });
       window.scrollTo(0, 0);
     }
+    /* Koppel klik-events aan de categorietoggle-knoppen */
     $$("[data-show-category]").forEach(function (btn) {
       btn.addEventListener("click", function () { show(btn.getAttribute("data-show-category")); });
     });
-    /* deeplink #electronics */
+    /* Ondersteuning voor deeplink: quint.com/producten#electronics */
     if (location.hash === "#electronics") show("electronics");
   }
 
   /* ========================================================
-     CATALOG — filters, sorteren, resultaat-telling (per sectie)
+     CATALOGUSFILTER — filter, sorteren en resultaattelling
+     Werkt per sectie zodat Loudspeakers en Electronics
+     elk hun eigen filterstate hebben.
      ======================================================== */
   function initCatalog() {
     $$(".cat-grid").forEach(initCatalogSection);
@@ -376,7 +434,7 @@
     var emptyEl = $(".cat-empty", section);
     var clearAllBtn = $(".cat-clear-all", section);
 
-    /* dropdown open/dicht */
+    /* Toggle de dropdown open/dicht; sluit andere open dropdowns */
     dropdowns.forEach(function (dd) {
       var btn = $(".filter-dd-btn", dd);
       btn.addEventListener("click", function (e) {
@@ -385,17 +443,21 @@
         dropdowns.forEach(function (d) { d.classList.remove("is-open"); });
         dd.classList.toggle("is-open", !wasOpen);
       });
+      /* Herfilter bij elke checkbox-wijziging */
       $$(".filter-dd-menu input", dd).forEach(function (inp) {
         inp.addEventListener("change", function () { updateDropdownState(dd); apply(); });
       });
+      /* "Clear"-knop binnen het dropdown-menu */
       var clr = $(".filter-dd-clear", dd);
       if (clr) clr.addEventListener("click", function () {
         $$(".filter-dd-menu input", dd).forEach(function (i) { i.checked = false; });
         updateDropdownState(dd); apply();
       });
     });
+    /* Klik buiten een dropdown sluit hem */
     document.addEventListener("click", function () { dropdowns.forEach(function (d) { d.classList.remove("is-open"); }); });
 
+    /* Update de badge (aantal geselecteerde opties) op de dropdownknop */
     function updateDropdownState(dd) {
       var n = $$(".filter-dd-menu input:checked", dd).length;
       dd.classList.toggle("has-count", n > 0);
@@ -403,12 +465,14 @@
       if (badge) badge.textContent = n;
     }
 
+    /* Geef de geselecteerde waarden terug voor een bepaalde filtergroep */
     function selectedFor(group) {
       var dd = dropdowns.filter(function (d) { return d.getAttribute("data-group") === group; })[0];
       if (!dd) return [];
       return $$(".filter-dd-menu input:checked", dd).map(function (i) { return i.value; });
     }
 
+    /* Pas filters en sortering toe en update de zichtbare kaarten */
     function apply() {
       var series = selectedFor("Series");
       var types = selectedFor("Type");
@@ -420,6 +484,7 @@
         var t = card.getAttribute("data-type");
         var u = (card.getAttribute("data-use") || "").split("|");
         var ok = true;
+        /* Verberg kaart als die niet voldoet aan de actieve filters */
         if (series.length && series.indexOf(s) === -1) ok = false;
         if (types.length && types.indexOf(t) === -1) ok = false;
         if (apps.length && !apps.some(function (a) { return u.indexOf(a) > -1; })) ok = false;
@@ -427,7 +492,7 @@
         if (ok) visible.push(card);
       });
 
-      /* sorteren */
+      /* Sorteer de zichtbare kaarten op basis van de geselecteerde sorteeroptie */
       var mode = sortSel ? sortSel.value : "Series";
       visible.sort(function (a, b) {
         if (mode === "Type") {
@@ -437,11 +502,13 @@
         if (mode === "Name A–Z") {
           return (a.getAttribute("data-name") || "").localeCompare(b.getAttribute("data-name") || "");
         }
+        /* Standaard: volgorde op basis van data-order attribuut (= redactionele volgorde) */
         return (parseInt(a.getAttribute("data-order"), 10) || 0) - (parseInt(b.getAttribute("data-order"), 10) || 0);
       });
+      /* Herplaats kaarten in de gesorteerde volgorde in de DOM */
       visible.forEach(function (c) { grid.appendChild(c); });
 
-      /* tellingen + lege staat */
+      /* Update de resultaattelling en toon de lege staat als er niets te zien is */
       var activeCount = series.length + types.length + apps.length;
       if (countEl) countEl.textContent = visible.length + (visible.length === 1 ? " result" : " results");
       if (emptyEl) emptyEl.style.display = visible.length === 0 ? "block" : "none";
@@ -452,7 +519,9 @@
       }
     }
 
+    /* Herfilter direct als de sorteeroptie verandert */
     if (sortSel) sortSel.addEventListener("change", apply);
+    /* "Clear all"-knop: wis alle filters in alle dropdowns */
     if (clearAllBtn) clearAllBtn.addEventListener("click", function () {
       dropdowns.forEach(function (dd) {
         $$(".filter-dd-menu input", dd).forEach(function (i) { i.checked = false; });
@@ -460,6 +529,7 @@
       });
       apply();
     });
+    /* "Clear filters"-knop in de lege staat */
     var emptyClear = $(".cat-empty .qbtn", section);
     if (emptyClear) emptyClear.addEventListener("click", function () {
       dropdowns.forEach(function (dd) {
@@ -469,11 +539,12 @@
       apply();
     });
 
-    apply();
+    apply(); /* Initiële render bij paginalading */
   }
 
   /* ========================================================
-     CAROUSEL (product-pagina)
+     CAROUSEL — productafbeeldingen op de productdetailpagina
+     Ondersteunt pijlknoppen, thumbnailklikken en een teller.
      ======================================================== */
   function initCarousel() {
     var car = $(".carousel");
@@ -483,8 +554,9 @@
     var thumbs = $$(".carousel-thumb", car);
     var labels = thumbs.map(function (t) { return t.getAttribute("data-label") || ""; });
     var total = thumbs.length;
-    var i = 0;
+    var i = 0; /* Huidige afbeeldingsindex */
 
+    /* Ga naar afbeelding n (wraps rond aan begin en einde) */
     function show(n) {
       i = (n + total) % total;
       thumbs.forEach(function (t, k) { t.classList.toggle("is-active", k === i); });
@@ -493,6 +565,7 @@
       }
       if (img) img.setAttribute("alt", "T24 " + labels[i]);
     }
+    /* Voeg een voorloopnul toe (01, 02, ...) */
     function pad(n) { return String(n).padStart(2, "0"); }
 
     thumbs.forEach(function (t, k) { t.addEventListener("click", function () { show(k); }); });
@@ -500,11 +573,12 @@
     var next = $(".carousel-arrow.next", car);
     if (prev) prev.addEventListener("click", function () { show(i - 1); });
     if (next) next.addEventListener("click", function () { show(i + 1); });
-    show(0);
+    show(0); /* Start op de eerste afbeelding */
   }
 
   /* ========================================================
-     VIDEO-MODAL (homepage)
+     VIDEO-MODAL — speelknop op de homepage opent een
+     overlay waarin een video-embed wordt getoond.
      ======================================================== */
   function initVideoModal() {
     var modal = $(".q-modal");
@@ -513,11 +587,12 @@
     var close = $(".q-modal-close", modal);
     if (play) play.addEventListener("click", function () { modal.classList.add("is-open"); });
     if (close) close.addEventListener("click", function () { modal.classList.remove("is-open"); });
+    /* Klik buiten het video-venster sluit de modal */
     modal.addEventListener("click", function (e) { if (e.target === modal) modal.classList.remove("is-open"); });
   }
 
   /* ========================================================
-     INIT
+     INIT — initialiseer alle modules zodra de DOM klaar is
      ======================================================== */
   function init() {
     initNavbar();

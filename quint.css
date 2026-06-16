@@ -552,6 +552,7 @@ button { font-family: var(--font-sans); }
 /* ============================================================
    RESPONSIVE
    ============================================================ */
+/* Tablet (≤ 1100px): 2-koloms grid, productpagina schakelt naar 1 kolom */
 @media (max-width: 1100px) {
   .cat-grid { grid-template-columns: repeat(2, 1fr); }
   .prod-hero-grid { grid-template-columns: 1fr; }
@@ -561,6 +562,7 @@ button { font-family: var(--font-sans); }
   .prod-apps-grid { grid-template-columns: repeat(2, 1fr); }
   .prod-strip { grid-template-columns: repeat(3, 1fr); row-gap: 20px; }
 }
+/* Mobiel (≤ 720px): navigatie verborgen, kleinere typografie, alles 1 kolom */
 @media (max-width: 720px) {
   :root { --gutter: 24px; }
   .q-nav-left, .q-nav-right { display: none; }
